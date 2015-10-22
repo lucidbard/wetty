@@ -96,13 +96,12 @@ var msgserv;
 
 msgserv = http.createServer(onRequest_a).listen(9012);
 var clients = [];
-var lossage = [];
 
 function onRequest_a (req, res) {
   var query = url.parse(req.url,true).query;
 
-  clients.forEach(function(conn, index) {
-    conn.send(JSON.stringify({
+  clients.forEach(function(client, index) {
+    client.conn.send(JSON.stringify({
       data: "",
       alt_data: query
     }));
@@ -117,9 +116,15 @@ var wss = new ws({
 });
 
 wss.on('request', function(request) {
+    var clientObj = {}
     var term;
     var sshuser = '';
     var conn = request.accept('wetty', request.origin);
+//    console.log(request);
+    if(request.resource == "/wetty/")
+      console.log("Original Connection");
+    else if(request.resource == "/wetty/index2.html")
+      console.log("Mobile connection");
     console.log((new Date()) + ' Connection accepted.');
     if (request.resource.match('^/wetty/ssh/')) {
         sshuser = request.resource;
@@ -130,30 +135,49 @@ wss.on('request', function(request) {
     } else if (globalsshuser) {
         sshuser = globalsshuser + '@';
     }
-  clients.push(conn);
+    clientObj.conn = conn;
     conn.on('message', function(msg) {
         var data = JSON.parse(msg.utf8Data);
         if (!term) {
-            if (process.getuid() == 0) {
+           if (clients.length > 0) {
+             clientObj = clients[0];
+              term = clientObj.term;
+              conn.send(JSON.stringify({
+                rowcol:clientObj.rowcol,
+                row:clientObj.row,
+                col:clientObj.col
+              }));
+              conn.send(JSON.stringify({
+                lossagePresent: true,
+                lossage: clientObj.lossage
+              }));
+             console.log("Mirroring client with PID="+clientObj.term.pid);
+           } else if (process.getuid() == 0) {
                 term = pty.spawn('/bin/login', [], {
                     name: 'xterm-256color',
                     cols: 80,
                     rows: 30
                 });
-              lossage[term.pid] = [];
+              clientObj.term = term;
+              clientObj.lossage = [];
+              clientObj.inputLossage = [];
+              clients.push(clientObj);
             } else {
                 term = pty.spawn('ssh', [sshuser + sshhost, '-p', sshport, '-o', 'PreferredAuthentications=' + sshauth], {
                     name: 'xterm-256color',
                     cols: 80,
                     rows: 30
                 });
-              lossage[term.pid] = [];
+              clientObj.term = term;
+              clientObj.lossage = [];
+              clients.push(clientObj);
             }
             console.log((new Date()) + " PID=" + term.pid + " STARTED on behalf of user=" + sshuser)
             term.on('data', function(data) {
                 conn.send(JSON.stringify({
                     data: data
                 }));
+                clientObj.lossage.push(data);
             });
             term.on('exit', function(code) {
                 console.log((new Date()) + " PID=" + term.pid + " ENDED")
@@ -163,9 +187,12 @@ wss.on('request', function(request) {
             return;
         if (data.rowcol) {
             term.resize(data.col, data.row);
+            clientObj.rowcol = data.rowcol;
+            clientObj.row = data.row;
+            clientObj.col = data.col;
         } else if (data.data) {
-          lossage[term.pid].push(data.data);
-            term.write(data.data);
+          clientObj.inputLossage.push(data.data);
+          term.write(data.data);
         }
     });
     conn.on('error', function() {
@@ -173,7 +200,7 @@ wss.on('request', function(request) {
         clients.splice(clients.indexOf(conn), 1);
     });
     conn.on('close', function() {
-        clients.splice(clients.indexOf(conn), 1);
         term.end();
+        clients.splice(clients.indexOf(conn), 1);
     })
 })

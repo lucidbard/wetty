@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="mobile-web-app-capable" content="yes">
+    <title>Wetty - The WebTTY Terminal Emulator</title>
+    <script src="/wetty/hterm_all2.js"></script>
+    <script src="/wetty/wetty2.js"></script>
+    <link rel="manifest" href="manifest.json">
+    <style>
+        html,
+        body {
+            height: 100%;
+            width: 100%;
+        margin: 0px;
+        background: black;
+        }
+
+        #terminal1 {
+            display: table-row;
+            position: relative;
+            width: 50%;
+            float: left;
+        height: 100%;
+        -webkit-transform: rotate(180deg);
+        -moz-transform: rotate(180deg);
+        -ms-transform: rotate(180deg);
+        -o-transform: rotate(180deg);
+        transform: rotate(180deg);
+        }
+
+        iframe {
+        display:table-cell !important;
+        position:absolute !important;
+        width:100% !important;
+        height:80% !important;
+        margin-top:20% !important;
+        top:0 !important;
+        bottom:0 !important;
+        right:0 !important;
+        left:0 !important;
+        }
+
+        #terminal2 {
+            display: table-row;
+            position: relative;
+            width: 50%;
+            float: left;
+        height: 100%;
+            -webkit-transform: rotate(180deg);
+    -moz-transform: rotate(180deg);
+    -ms-transform: rotate(180deg);
+    -o-transform: rotate(180deg);
+    transform: rotate(180deg);
+        }
+        #container {
+        position: absolute;
+        background: black;
+        display: table;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        width:100%;
+        height:100%;
+        }
+        #enableFullscreen {
+        position:absolute;
+        display:table;
+        width:300px;
+        height:200px;
+        background-color:white;
+        top: 50%;
+        left: 50%;
+        margin-left: -150px;
+        vertical-align:middle;
+        }
+        #enableFullscreen  p {
+        display:table-cell;
+        vertical-align: middle;
+        text-align:center;
+        }
+
+    </style>
+</head>
+
+<body>
+  <div id="container">
+  <div id="terminal1"></div>
+  <div id="terminal2"></div>
+  </div>
+      <div id="enableFullscreen"><p>Enable Fullscreen</p></div>
+  <script>
+    init();
+    var container, element;
+    function init() {
+    container = document.getElementById('container');
+    element = document.getElementById('enableFullscreen');
+    element.addEventListener('click',fullscreen,true);
+    }
+    function fullscreen() {
+    console.log("Clicked");
+    if (container.requestFullscreen) {
+    container.requestFullscreen();
+    } else if (container.msRequestFullscreen) {
+    container.msRequestFullscreen();
+    } else if (container.mozRequestFullScreen) {
+    container.mozRequestFullscreen();
+    } else if (container.webkitRequestFullscreen) {
+    container.webkitRequestFullscreen();
+    }
+    element.parentNode.removeChild(element);
+    }
+    
+  </script>
+  
+</body>
+
+</html>

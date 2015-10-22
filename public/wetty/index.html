@@ -22,6 +22,22 @@
         height:100%;
         }
 
+        #display {
+        display: block;
+        position: relative;
+        float: left;
+        width:100%;
+        height:60%;
+        }
+        
+        #log {
+        display: block;
+        position: relative;
+        float: left;
+        width:100%;
+        height:40%;
+        }
+        
         #terminal {
             display: block;
             position: relative;
@@ -33,7 +49,10 @@
 </head>
 
 <body>
-  <div id="sidebar"></div>
+  <div id="sidebar">
+    <div id="display"></div>
+    <div id="log"></div>
+  </div>
   <div id="terminal"></div>
 </body>
 

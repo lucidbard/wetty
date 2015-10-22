@@ -24,7 +24,7 @@ Wetty.prototype.sendString_ = function(str) {
 Wetty.prototype.onTerminalResize = function(col, row) {
     if (ws)
         ws.send(JSON.stringify({
-            rowcol: true,
+            rowcol: false,
             col: col,
             row: row
         }));
@@ -36,33 +36,41 @@ ws.onopen = function() {
         term = new hterm.Terminal();
         window.term = term;
         term.decorate(document.getElementById('terminal'));
-
         term.setCursorPosition(0, 0);
         term.setCursorVisible(true);
         term.prefs_.set('ctrl-c-copy', true);
         term.prefs_.set('ctrl-v-paste', true);
         term.prefs_.set('use-default-window-copy', true);
+        term.setFontSize(8);
 
         term.runCommandClass(Wetty, document.location.hash.substr(1));
-        ws.send(JSON.stringify({
+
+/*        ws.send(JSON.stringify({
             rowcol: true,
             col: term.screenSize.width,
             row: term.screenSize.height
-        }));
+        }));*/
     });
 }
 ws.onmessage = function(msg) {
     if (!msg || !msg.data)
         return;
     var data = JSON.parse(msg.data);
+    if(data.rowcol) {
+      console.log("Setting row col:");
+      console.log(data.row + ", " + data.col);
+      term.setWidth = data.col;
+      term.setHeight = data.row;
+      }
+    if (data.lossagePresent) {
+      console.log("Getting lossage");
+      console.log(data.lossage);
+      data.lossage.forEach(function(com,index) {
+        term.io.writeUTF16(com);
+      });
+    }
     if (term)
         term.io.writeUTF16(data.data);
-    if (data.alt_data) {
-      console.log(data.alt_data);
-      var sidebar = document.getElementById("sidebar");
-      sidebar.innerHTML+="<p>"+data.alt_data.content+"</p>";
-    }
-
 }
 ws.onerror = function(e) {
     console.log("WebSocket connection error");

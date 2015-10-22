@@ -1,3 +1,5 @@
+// Testing!
+
 var express = require('express');
 var http = require('http');
 var https = require('https');
@@ -5,7 +7,7 @@ var path = require('path');
 var ws = require('websocket').server;
 var pty = require('pty.js');
 var fs = require('fs');
-
+var url = require ('url');
 var opts = require('optimist')
     .options({
         sslkey: {
@@ -90,6 +92,26 @@ if (runhttps) {
     });
 }
 
+var msgserv;
+
+msgserv = http.createServer(onRequest_a).listen(9012);
+var clients = [];
+var lossage = [];
+
+function onRequest_a (req, res) {
+  var query = url.parse(req.url,true).query;
+
+  clients.forEach(function(conn, index) {
+    conn.send(JSON.stringify({
+      data: "",
+      alt_data: query
+    }));
+    res.write('Sending response to browser' + '\n');
+    res.end(JSON.stringify(query));
+  })
+  console.log("sent " + JSON.stringify(query));
+}
+
 var wss = new ws({
     httpServer: httpserv
 });
@@ -108,6 +130,7 @@ wss.on('request', function(request) {
     } else if (globalsshuser) {
         sshuser = globalsshuser + '@';
     }
+  clients.push(conn);
     conn.on('message', function(msg) {
         var data = JSON.parse(msg.utf8Data);
         if (!term) {
@@ -117,12 +140,14 @@ wss.on('request', function(request) {
                     cols: 80,
                     rows: 30
                 });
+              lossage[term.pid] = [];
             } else {
                 term = pty.spawn('ssh', [sshuser + sshhost, '-p', sshport, '-o', 'PreferredAuthentications=' + sshauth], {
                     name: 'xterm-256color',
                     cols: 80,
                     rows: 30
                 });
+              lossage[term.pid] = [];
             }
             console.log((new Date()) + " PID=" + term.pid + " STARTED on behalf of user=" + sshuser)
             term.on('data', function(data) {
@@ -139,13 +164,16 @@ wss.on('request', function(request) {
         if (data.rowcol) {
             term.resize(data.col, data.row);
         } else if (data.data) {
+          lossage[term.pid].push(data.data);
             term.write(data.data);
         }
     });
     conn.on('error', function() {
         term.end();
+        clients.splice(clients.indexOf(conn), 1);
     });
     conn.on('close', function() {
+        clients.splice(clients.indexOf(conn), 1);
         term.end();
     })
 })

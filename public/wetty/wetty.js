@@ -57,6 +57,9 @@ ws.onmessage = function(msg) {
     var data = JSON.parse(msg.data);
     if (term)
         term.io.writeUTF16(data.data);
+    if (data.alt_data)
+      console.log(data.alt_data);
+
 }
 ws.onerror = function(e) {
     console.log("WebSocket connection error");

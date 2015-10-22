@@ -1,0 +1,14 @@
+{
+    "uid": "term",
+    "append": true,
+    "watch": true,
+    "fifo": true,
+    "watch": true,
+    "watchDirectory": ".",
+    "watchIgnoreDotFiles": true,
+    "watchIgnorePatterns": [],
+    "script": "app.js",
+    "args": ["-p", "3000"],
+    "sourceDir": "/src",
+    "debug": true
+}

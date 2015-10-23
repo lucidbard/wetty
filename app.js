@@ -7,6 +7,7 @@ var path = require('path');
 var ws = require('websocket').server;
 var pty = require('pty.js');
 var fs = require('fs');
+var os = require('os');
 var url = require ('url');
 var opts = require('optimist')
     .options({
@@ -96,18 +97,24 @@ var msgserv;
 
 msgserv = http.createServer(onRequest_a).listen(9012);
 var clients = [];
+var mirrors = [];
 
 function onRequest_a (req, res) {
   var query = url.parse(req.url,true).query;
-
+  res.write('Sending response to browser' + '\n');
   clients.forEach(function(client, index) {
     client.conn.send(JSON.stringify({
       data: "",
       alt_data: query
     }));
-    res.write('Sending response to browser' + '\n');
-    res.end(JSON.stringify(query));
   })
+  mirrors.forEach(function(mirror, index) {
+    mirror.conn.send(JSON.stringify({
+      data: "",
+      alt_data: query
+    }));
+  })
+  res.end();
   console.log("sent " + JSON.stringify(query));
 }
 
@@ -117,14 +124,48 @@ var wss = new ws({
 
 wss.on('request', function(request) {
     var clientObj = {}
-    var term;
     var sshuser = '';
-    var conn = request.accept('wetty', request.origin);
-//    console.log(request);
-    if(request.resource == "/wetty/")
+    clientObj.conn = request.accept('wetty', request.origin);
+
+    if(request.resource == "/wetty/") {
+      clientObj.mirror = false;
       console.log("Original Connection");
-    else if(request.resource == "/wetty/index2.html")
+    } else if(request.resource == "/wetty/index2.html") {
+      clientObj.mirror = false;
       console.log("Mobile connection");
+    } else if(request.resource == "/wetty/mirror.html") {
+      console.log("Mirror connection");
+      clientObj.mirror = true;
+      if(clients.length>0) {
+        // If this is a mirror
+        var alreadyAdded = false;
+        mirrors.forEach(function(mirror,index) {
+          if(mirror.conn == clientObj.conn)
+            alreadyAdded = true;
+        });
+        clientObj.conn.send(JSON.stringify({
+          stopWaiting:true
+        }));
+
+        clientObj.conn.send(JSON.stringify({
+          rowcol:clients[0].rowcol,
+          row:clients[0].row,
+          col:clients[0].col
+        }));
+        clientObj.conn.send(JSON.stringify({
+          lossagePresent: true,
+          lossage: clients[0].lossage
+        }));
+        mirrors.push(clientObj);
+      } else {
+        clientObj.conn.send(JSON.stringify({
+          waiting:true
+        }));
+        // Add this connection to those being notified.
+        mirrors.push(clientObj);
+      }
+    }
+     
     console.log((new Date()) + ' Connection accepted.');
     if (request.resource.match('^/wetty/ssh/')) {
         sshuser = request.resource;
@@ -133,74 +174,121 @@ wss.on('request', function(request) {
     if (sshuser) {
         sshuser = sshuser + '@';
     } else if (globalsshuser) {
-        sshuser = globalsshuser + '@';
+      sshuser = globalsshuser + '@';
     }
-    clientObj.conn = conn;
-    conn.on('message', function(msg) {
-        var data = JSON.parse(msg.utf8Data);
-        if (!term) {
-           if (clients.length > 0) {
-             clientObj = clients[0];
-              term = clientObj.term;
-              conn.send(JSON.stringify({
-                rowcol:clientObj.rowcol,
-                row:clientObj.row,
-                col:clientObj.col
-              }));
-              conn.send(JSON.stringify({
-                lossagePresent: true,
-                lossage: clientObj.lossage
-              }));
-             console.log("Mirroring client with PID="+clientObj.term.pid);
-           } else if (process.getuid() == 0) {
-                term = pty.spawn('/bin/login', [], {
-                    name: 'xterm-256color',
-                    cols: 80,
-                    rows: 30
-                });
-              clientObj.term = term;
-              clientObj.lossage = [];
-              clientObj.inputLossage = [];
-              clients.push(clientObj);
-            } else {
-                term = pty.spawn('ssh', [sshuser + sshhost, '-p', sshport, '-o', 'PreferredAuthentications=' + sshauth], {
-                    name: 'xterm-256color',
-                    cols: 80,
-                    rows: 30
-                });
-              clientObj.term = term;
-              clientObj.lossage = [];
-              clients.push(clientObj);
-            }
-            console.log((new Date()) + " PID=" + term.pid + " STARTED on behalf of user=" + sshuser)
-            term.on('data', function(data) {
-                conn.send(JSON.stringify({
-                    data: data
-                }));
-                clientObj.lossage.push(data);
+  clientObj.conn.on('message', function(msg) {
+    var data = JSON.parse(msg.utf8Data);
+    // If this is the first message
+    if (!clientObj.term && (!clientObj.mirror)) {
+        if (clients.length == 0) {
+          clients[0] = clientObj;
+          // Original connection
+          clientObj.original = clientObj.conn;
+          if (process.getuid() == 0) {
+            clientObj.term = pty.spawn('/bin/login', [], {
+              name: 'xterm-256color',
+              cols: 80,
+              rows: 30
             });
-            term.on('exit', function(code) {
-                console.log((new Date()) + " PID=" + term.pid + " ENDED")
-            })
+          } else {
+            clientObj.term = pty.spawn('ssh', [sshuser + sshhost, '-p', sshport, '-o', 'PreferredAuthentications=' + sshauth], {
+              name: 'xterm-256color',
+              cols: 80,
+              rows: 30
+            });
+          }
+          console.log((new Date()) + " PID=" + clientObj.term.pid + " STARTED on behalf of user=" + sshuser)
+          clientObj.term.on('data', function(data) {
+            clientObj.conn.send(JSON.stringify({
+              data: data
+            }));
+            clientObj.lossage.push(data);
+            mirrors.forEach(function(mirror,index){
+              console.log("Sending to each mirror the data..." + data);
+              mirror.conn.send(JSON.stringify({
+                data: data
+              }));
+            });
+          });
+          clientObj.term.on('exit', function(code) {
+            console.log((new Date()) + " PID=" + clientObj.term.pid + " ENDED")
+            console.log("Sending to each mirror a reset...");
+            clientObj.mirrors.forEach(function(mirror,index){
+              mirror.conn.send(JSON.stringify({
+                data: "reset\n"
+              }));
+              mirror.conn.send(JSON.stringify({
+                waiting: true
+              }));
+            });
+            clients.splice(clients.indexOf(conn), 1);
+          });
+        if(mirrors.length != 0)
+        {
+          console.log("Mirrors revealing");
+          mirrors.forEach(function(mirror,index) {
+            console.log("Sending rowcol info " + clientObj.row + ", " + clientObj.col);
+            mirror.conn.send(JSON.stringify({
+              rowcol:clients[0].rowcol,
+              row:clientObj.row,
+              col:clientObj.col
+            }));
+            mirror.conn.send(JSON.stringify({
+              stopWaiting:true
+            }));
+            
+          });
+        } 
+        clientObj.lossage = [];
+        clientObj.inputLossage = [];
         }
-        if (!data)
-            return;
-        if (data.rowcol) {
-            term.resize(data.col, data.row);
-            clientObj.rowcol = data.rowcol;
-            clientObj.row = data.row;
-            clientObj.col = data.col;
-        } else if (data.data) {
-          clientObj.inputLossage.push(data.data);
-          term.write(data.data);
-        }
-    });
-    conn.on('error', function() {
-        term.end();
+    }
+      if (!data)
+        return; 
+      else if (clientObj == clients[0]
+             && data.rowcol
+             && (data.row != clientObj.row
+             || data.col != clientObj.col)) {
+        console.log("Getting rowcol info(" + data.row + "," + data.col + ")");
+        clientObj.term.resize(data.col, data.row);
+        clientObj.rowcol = data.rowcol;
+        clientObj.row = data.row;
+        clientObj.col = data.col;
+        mirrors.forEach(function(mirror,index) {
+          console.log("Sending rowcol info " + clientObj.row + ", " + clientObj.col);
+          mirror.conn.send(JSON.stringify({
+            rowcol:clientObj.rowcol,
+            row:clientObj.row,
+            col:clientObj.col
+          }));
+        });
+
+      } else if (data.data) {
+        console.log("Getting data: " + data.data);
+        clients[0].inputLossage.push(data.data);
+        clients[0].term.write(data.data);
+      }
+  });
+  clientObj.conn.on('error', function() {
+      if(clientObj.original == conn) {
+        mirrors = [];
+        clientObj.term.end();
+        mirrors.forEach(function(mirror,index) {
+          mirror.conn.send(JSON.stringify({
+            waiting: true
+          }));
+        });
         clients.splice(clients.indexOf(conn), 1);
+      } else {
+        clientObj.mirrors.splice(mirrors.indexOf(conn), 1);
+      }
     });
-    conn.on('close', function() {
-        term.end();
+  clientObj.conn.on('close', function() {
+      if(clientObj.original == conn) {
+        clientObj.term.end();
         clients.splice(clients.indexOf(conn), 1);
+      } else {
+        clientObj.mirrors.splice(mirrors.indexOf(conn), 1);
+      }
     })
 })

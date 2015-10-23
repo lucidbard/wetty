@@ -23,6 +23,7 @@ Wetty.prototype.sendString_ = function(str) {
 };
 
 Wetty.prototype.onTerminalResize = function(col, row) {
+  console.log("RESIZING  TERMINAL");
     if (ws)
         ws.send(JSON.stringify({
             rowcol: true,

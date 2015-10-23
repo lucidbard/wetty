@@ -52,6 +52,8 @@ ws.onopen = function() {
     });
 }
 ws.onmessage = function(msg) {
+  console.log("Getting message: ");
+  console.log(msg);
     if (!msg || !msg.data)
         return;
     var data = JSON.parse(msg.data);
@@ -59,7 +61,7 @@ ws.onmessage = function(msg) {
         term.io.writeUTF16(data.data);
     if (data.alt_data) {
       console.log(data.alt_data);
-      var sidebar = document.getElementById("sidebar");
+      var sidebar = document.getElementById("display");
       sidebar.innerHTML+="<p>"+data.alt_data.content+"</p>";
     }
 

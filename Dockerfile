@@ -12,7 +12,7 @@ ENV NODE_PATH /install/node_modules/
 
 COPY ./package.json /install/package.json
 
-RUN cd /install; npm install; npm install supervisor -g
+RUN cd /install; npm install; npm install redis; npm install pg; npm install mongodb; npm install supervisor -g; 
 #npm install forever; npm install nodemon
 
 WORKDIR /src/

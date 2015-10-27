@@ -8,7 +8,6 @@ var path = require('path');
 var ws = require('websocket').server;
 var pty = require('pty.js');
 var fs = require('fs');
-
 var os = require('os');
 var url = require ('url');
 var opts = require('optimist')
@@ -165,8 +164,9 @@ wss.on('request', function(request) {
           if(request.resource == "/wetty/") {
             clientObj.mirror = false;
             console.log("Original Connection");
-          } else if(request.resource == "/wetty/index2.html") {
+          } else if(request.resource == "/wetty/index2.html" || request.resource == "/wetty/orientation.html") {
             clientObj.mirror = false;
+            clientObj.mobile = true;
             console.log("Mobile connection");
           } else if(request.resource == "/wetty/mirror.html") {
             console.log("Mirror connection");
@@ -251,7 +251,7 @@ wss.on('request', function(request) {
                       waiting: true
                     }));
                   });
-                  clients.splice(clients.indexOf(clientObj.conn), 1);
+                  clients.splice(clients.indexOf(clientObj), 1);
                 });
                 if(mirrors.length != 0)
                 {
